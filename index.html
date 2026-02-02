@@ -15,8 +15,8 @@
     let testCrazy = false;
     let crazyGamesHouseAdCheck = null;
 </script>
-<script>window.JSCDN="https://cdn.jsdelivr.net/gh/apstudy/mathlete@5a79523/";</script>
-<script src="https://cdn.jsdelivr.net/gh/apstudy/mathlete@5a79523/app/checker.js"></script>
+<script>window.JSCDN="https://cdn.jsdelivr.net/gh/apstudy/mathlete@f1365ac/";</script>
+<script src="https://cdn.jsdelivr.net/gh/apstudy/mathlete@f1365ac/app/checker.js"></script>
 <script>
     let HouseAds;
     var shellLogo = 'https://cdn.jsdelivr.net/gh/apstudy/mathlete@5a79523/img/logo.svg';
@@ -45,14 +45,14 @@
 
 		// --- URL resolution and validation ---
 		static _jscdnReady = false;
-		static _jscdnFallback = 'https://cdn.jsdelivr.net/gh/shellbros/mathlete/';
+		static _jscdnFallback = 'https://cdn.jsdelivr.net/gh/apstudy/mathlete/';
 		static _pendingLoads = [];
 		static _jscdnCheckAttempts = 0;
 		static _jscdnInterval = null;
 
 		static _validateUrl(url) {
 			const lower = url.toLowerCase();
-			return lower.includes('cdn.jsdelivr.net') && lower.includes('shellbros/mathlete');
+			return lower.includes('cdn.jsdelivr.net') && lower.includes('apstudy/mathlete');
 		}
 
 		static _resolveurl(path) {
