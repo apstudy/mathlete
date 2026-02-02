@@ -11,9 +11,9 @@ import urllib.request
 
 
 JSDELIVR_PURGE_URLS = [
-    "https://purge.jsdelivr.net/gh/shellbros/mathlete/app/build.json",
-    "https://purge.jsdelivr.net/gh/shellbros/mathlete/app/checker.js",
-    "https://purge.jsdelivr.net/gh/shellbros/mathlete/index.js",
+    "https://purge.jsdelivr.net/gh/apstudy/mathlete/app/build.json",
+    "https://purge.jsdelivr.net/gh/apstudy/mathlete/app/checker.js",
+    "https://purge.jsdelivr.net/gh/apstudy/mathlete/index.js",
 ]
 
 

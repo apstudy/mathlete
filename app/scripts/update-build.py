@@ -64,7 +64,7 @@ def main():
     # Always update CDN URLs in index.html: find whatever hash is there and replace with new hash
     if index_file.exists():
         html = index_file.read_text('utf-8')
-        pattern = r'shellbros/mathlete@([a-f0-9]+)/'
+        pattern = r'apstudy/mathlete@([a-f0-9]+)/'
         found = re.findall(pattern, html)
         count = len(found)
 
@@ -78,7 +78,7 @@ def main():
                 print(f"[DRY-RUN] Would replace {count} CDN URLs in index.html:")
                 print(f"  @{old_hash}/ → @{short_hash}/")
             else:
-                html = re.sub(pattern, f'shellbros/mathlete@{short_hash}/', html)
+                html = re.sub(pattern, f'apstudy/mathlete@{short_hash}/', html)
                 index_file.write_text(html, 'utf-8')
                 print(f"✓ Updated {count} CDN URLs in index.html")
                 print(f"  @{old_hash}/ → @{short_hash}/")
