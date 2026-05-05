@@ -58,6 +58,7 @@ awk '
 echo "Patching Loader build.json key in $FILE"
 sed -i '' \
   -e 's/(j && j\.sha || '"'"''"'"')\.trim()/(j \&\& (j.sha || j.build_version) || '"'"''"'"').trim()/g' \
+  -e 's/Loader\.cdnurl(/Loader.cdnUrl(/g' \
   "$FILE"
 
 echo "Rewriting paths in $FILE"
