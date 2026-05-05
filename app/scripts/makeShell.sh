@@ -54,6 +54,12 @@ awk '
   { print }
 ' "$FILE" > "$FILE.tmp" && mv "$FILE.tmp" "$FILE"
 
+# 3. Patch Loader to read both `sha` and `build_version` from build.json (defensive)
+echo "Patching Loader build.json key in $FILE"
+sed -i '' \
+  -e 's/(j && j\.sha || '"'"''"'"')\.trim()/(j \&\& (j.sha || j.build_version) || '"'"''"'"').trim()/g' \
+  "$FILE"
+
 echo "Rewriting paths in $FILE"
 node cdnSearchReplace.js "$CDN"
 echo "Build complete. Output available in '../..'."

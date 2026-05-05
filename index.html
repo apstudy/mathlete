@@ -17,8 +17,8 @@
     let crazyGamesHouseAdCheck = null;
 </script>
 <script src="https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io/app/build.json"></script>
-<script>window.JSCDN="https://cdn.jsdelivr.net/gh/apstudy/mathlete@270a2e9/";</script>
-<script src="https://cdn.jsdelivr.net/gh/apstudy/mathlete@270a2e9/app/checker.js"></script>
+<script>window.JSCDN="https://cdn.jsdelivr.net/gh/apstudy/mathlete@69cd615/";</script>
+<script src="https://cdn.jsdelivr.net/gh/apstudy/mathlete@69cd615/app/checker.js"></script>
 <script>
     let HouseAds;
     var shellLogo = 'https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io/img/logo.svg';
@@ -303,7 +303,7 @@
 			if (!res.ok) throw new Error(`build.json fetch failed: ${res.status} ${res.statusText}`);
 
 			const j = await res.json();
-			const sha = (j && j.sha || '').trim();
+			const sha = (j && (j.sha || j.build_version) || '').trim();
 
 			// defensive: only allow hex SHAs (7..40)
 			if (!/^[0-9a-f]{7,40}$/i.test(sha)) throw new Error(`Invalid sha in build.json: "${sha}"`);
@@ -624,7 +624,7 @@
 </style><!-- Styles & Fonts -->
 <link href="https://fonts.googleapis.com/css?family=Sigmar+One|Nunito:100,200,600,700,900" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.min.css" crossorigin="anonymous">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io/styles/style.min.css?1777927361"><script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io/styles/style.min.css?1777953252"><script>
 function storageFactory(getStorage) {
 
 	const inMemoryStorage = {};
