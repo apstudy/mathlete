@@ -596,7 +596,7 @@
 
 async function initJSCDN() {
   try {
-    const res = await fetch('https://cdn.jsdelivr.net/gh/apstudy/mathlete/app/build.json', { cache: 'no-store' });
+    const res = await fetch('https://cdn.jsdelivr.net/gh/apstudy/mathlete@main/app/build.json', { cache: 'no-store' });
     if (res.ok) {
       const data = await res.json();
       if (data.build_version) {
