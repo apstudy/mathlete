@@ -79,7 +79,9 @@ echo -e "${BLUE}║  Step 2: Updating Proxy Allowlist     ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
 echo ""
 
+cd "$SCRIPT_DIR"
 bash "$ALLOWLIST_SCRIPT"
+cd "$REPO_ROOT"
 echo ""
 
 # ============================================
