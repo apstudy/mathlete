@@ -612,8 +612,10 @@ async function initJSCDN() {
 async function preloadProxyHost() {
 
 	window.overrideWssBase = null;
+	window.dynamicContentRoot = null;
 
-    if (!window.location.hostname.endsWith('github.io')) return;
+    const host = window.location.hostname;
+    if (host.endsWith('.pages.dev') || host.endsWith('.shellshock.io') || host.endsWith('.shellshockers.com')) return;
 
     const urls = [
         'mathlete.pages.dev',
@@ -624,6 +626,7 @@ async function preloadProxyHost() {
 
     if (working) {
         window.overrideWssBase = working;
+        window.dynamicContentRoot = working;
     }
 }
 
