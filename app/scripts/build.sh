@@ -144,6 +144,18 @@ fi
 echo ""
 
 # ============================================
+# Step 7: Sync master branch
+# ============================================
+echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║  Step 7: Syncing master to main       ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
+echo ""
+
+git branch -f master main
+echo -e "${GREEN}master branch updated to match main${NC}"
+echo ""
+
+# ============================================
 # Build Complete
 # ============================================
 echo -e "${CYAN}╔════════════════════════════════════════╗${NC}"
@@ -152,7 +164,7 @@ echo -e "${CYAN}╚════════════════════�
 echo ""
 echo -e "${YELLOW}Next steps:${NC}"
 echo -e "   ${BLUE}1.${NC} Push to deploy:"
-echo -e "      ${GREEN}git push origin main${NC}"
+echo -e "      ${GREEN}git push origin main master${NC}"
 echo ""
 echo -e "   ${BLUE}2.${NC} Purge jsDelivr cache:"
 echo -e "      ${GREEN}python3 app/scripts/purge.py${NC}"
