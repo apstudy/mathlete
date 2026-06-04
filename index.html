@@ -299,59 +299,53 @@
 		static async getBuildSha() {
 			if (Loader._buildSha) return Loader._buildSha;
 
-			const res = await fetch('https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io/app/build.json', { cache: 'no-store' });
+			const cdnBase = (window.JSCDN || '').replace(/\/+$/, '');
+			const res = await fetch(cdnBase + '/app/build.json', { cache: 'no-store' });
 			if (!res.ok) throw new Error(`build.json fetch failed: ${res.status} ${res.statusText}`);
 
 			const j = await res.json();
 			const sha = (j && (j.sha || j.build_version) || '').trim();
 
-			// defensive: only allow hex SHAs (7..40)
 			if (!/^[0-9a-f]{7,40}$/i.test(sha)) throw new Error(`Invalid sha in build.json: "${sha}"`);
 
 			Loader._buildSha = sha;
-			window.JSCDN = `https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io@${sha}/`;
 			return sha;
 		}
 
 		static async cdnUrl(input) {
-			const sha = await Loader.getBuildSha();
 			const raw = String(input || '').trim();
-
-			// Strip query/hash (your builder adds ?mtime)
 			const noQ = raw.split('#')[0].split('?')[0];
 
-			// If builder already rewrote to jsDelivr (unpinned), extract the path part
-			// Examples:
-			//  https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io/js/shellshock.js
-			//  https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io@main/js/shellshock.js
-			const jsdelivrPrefix = 'https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io';
+			const knownPrefixes = [
+				'https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io',
+				'https://cdn.jsdelivr.net/gh/apstudy/mathlete'
+			];
 			let relPath = noQ;
 
-			if (relPath.startsWith(jsdelivrPrefix)) {
-				// Remove prefix and optional @ref segment if present
-				relPath = relPath.slice(jsdelivrPrefix.length);
-
-				// relPath now starts with either "/js/..." or "@ref/js/..."
-				if (relPath.startsWith('@')) {
-				const slash = relPath.indexOf('/');
-				relPath = slash >= 0 ? relPath.slice(slash) : '';
+			for (const prefix of knownPrefixes) {
+				if (relPath.startsWith(prefix)) {
+					relPath = relPath.slice(prefix.length);
+					if (relPath.startsWith('@')) {
+						const slash = relPath.indexOf('/');
+						relPath = slash >= 0 ? relPath.slice(slash) : '';
+					}
+					break;
 				}
 			}
 
-			// Now force relative path form like "js/..."
 			relPath = relPath.replace(/^\/+/, '');
 
-			// Defensive: refuse anything still absolute or empty
 			if (!relPath || /^(https?:)?\/\//i.test(relPath) || relPath.startsWith('data:')) {
 				throw new Error(`Refusing invalid path: ${input}`);
 			}
 
-			return `https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io@${sha}/${relPath}`;
+			const cdnBase = (window.JSCDN || '').replace(/\/+$/, '');
+			return `${cdnBase}/${relPath}`;
 		}
 
 		static async importWasmLoader() {
 			if (Loader._wasmMod) return Loader._wasmMod;
-			const url = await Loader.cdnUrl('https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io/js/wasm_loader.js');
+			const url = await Loader.cdnUrl('js/wasm_loader.js');
 			Loader._wasmMod = import(url);
 			return Loader._wasmMod;
 		}
