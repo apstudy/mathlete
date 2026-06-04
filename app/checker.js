@@ -632,11 +632,4 @@ async function preloadProxyHost() {
     await preloadProxyHost();
 	console.log('preloaded proxy host', window.overrideWssBase);
     ProxyFinder.start();
-
-    setTimeout(() => {
-        console.log('[DEBUG] typeof isGitHubPages:', typeof isGitHubPages);
-        try { console.log('[DEBUG] isGitHubPages():', isGitHubPages()); } catch(e) { console.log('[DEBUG] isGitHubPages error:', e.message); }
-        console.log('[DEBUG] location.hostname:', JSON.stringify(window.location.hostname));
-        console.log('[DEBUG] dynamicContentRoot:', window.dynamicContentRoot);
-    }, 8000);
 })();
