@@ -17,8 +17,8 @@
     let crazyGamesHouseAdCheck = null;
 </script>
 <script src="https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io/app/build.json"></script>
-<script>window.JSCDN="https://cdn.jsdelivr.net/gh/apstudy/mathlete@4fb4cdd/";</script>
-<script src="https://cdn.jsdelivr.net/gh/apstudy/mathlete@4fb4cdd/app/checker.js"></script>
+<script>window.JSCDN="https://cdn.jsdelivr.net/gh/apstudy/mathlete@a69faf4/";</script>
+<script src="https://cdn.jsdelivr.net/gh/apstudy/mathlete@a69faf4/app/checker.js"></script>
 <script>
     let HouseAds;
     var shellLogo = 'https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io/img/logo.svg';
@@ -33,6 +33,29 @@
             }
         }
     }
+
+	const ThrityThreeAcrossObserver = new MutationObserver(mutations => {
+
+	for (const mutation of mutations) {
+		for (const node of mutation.addedNodes) {
+		if (!(node instanceof Element)) continue;
+
+		const overlay = node.matches('.ttx-lb')
+			? node
+			: node.querySelector?.('.ttx-lb');
+
+		if (overlay) {
+			console.warn('Removed AIP/33Across overlay:', new Date().toISOString(), overlay);
+			overlay.remove();
+		}
+		}
+	}
+	});
+
+	ThrityThreeAcrossObserver.observe(document.body, {
+	childList: true,
+	subtree: true
+	});
 
     getAds();
 
@@ -299,53 +322,59 @@
 		static async getBuildSha() {
 			if (Loader._buildSha) return Loader._buildSha;
 
-			const cdnBase = (window.JSCDN || '').replace(/\/+$/, '');
-			const res = await fetch(cdnBase + '/app/build.json', { cache: 'no-store' });
+			const res = await fetch('https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io/app/build.json', { cache: 'no-store' });
 			if (!res.ok) throw new Error(`build.json fetch failed: ${res.status} ${res.statusText}`);
 
 			const j = await res.json();
 			const sha = (j && (j.sha || j.build_version) || '').trim();
 
+			// defensive: only allow hex SHAs (7..40)
 			if (!/^[0-9a-f]{7,40}$/i.test(sha)) throw new Error(`Invalid sha in build.json: "${sha}"`);
 
 			Loader._buildSha = sha;
+			window.JSCDN = `https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io@${sha}/`;
 			return sha;
 		}
 
 		static async cdnUrl(input) {
+			const sha = await Loader.getBuildSha();
 			const raw = String(input || '').trim();
+
+			// Strip query/hash (your builder adds ?mtime)
 			const noQ = raw.split('#')[0].split('?')[0];
 
-			const knownPrefixes = [
-				'https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io',
-				'https://cdn.jsdelivr.net/gh/apstudy/mathlete'
-			];
+			// If builder already rewrote to jsDelivr (unpinned), extract the path part
+			// Examples:
+			//  https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io/js/shellshock.js
+			//  https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io@main/js/shellshock.js
+			const jsdelivrPrefix = 'https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io';
 			let relPath = noQ;
 
-			for (const prefix of knownPrefixes) {
-				if (relPath.startsWith(prefix)) {
-					relPath = relPath.slice(prefix.length);
-					if (relPath.startsWith('@')) {
-						const slash = relPath.indexOf('/');
-						relPath = slash >= 0 ? relPath.slice(slash) : '';
-					}
-					break;
+			if (relPath.startsWith(jsdelivrPrefix)) {
+				// Remove prefix and optional @ref segment if present
+				relPath = relPath.slice(jsdelivrPrefix.length);
+
+				// relPath now starts with either "/js/..." or "@ref/js/..."
+				if (relPath.startsWith('@')) {
+				const slash = relPath.indexOf('/');
+				relPath = slash >= 0 ? relPath.slice(slash) : '';
 				}
 			}
 
+			// Now force relative path form like "js/..."
 			relPath = relPath.replace(/^\/+/, '');
 
+			// Defensive: refuse anything still absolute or empty
 			if (!relPath || /^(https?:)?\/\//i.test(relPath) || relPath.startsWith('data:')) {
 				throw new Error(`Refusing invalid path: ${input}`);
 			}
 
-			const cdnBase = (window.JSCDN || '').replace(/\/+$/, '');
-			return `${cdnBase}/${relPath}`;
+			return `https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io@${sha}/${relPath}`;
 		}
 
 		static async importWasmLoader() {
 			if (Loader._wasmMod) return Loader._wasmMod;
-			const url = await Loader.cdnUrl('js/wasm_loader.js');
+			const url = await Loader.cdnUrl('https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io/js/wasm_loader.js');
 			Loader._wasmMod = import(url);
 			return Loader._wasmMod;
 		}
@@ -618,7 +647,7 @@
 </style><!-- Styles & Fonts -->
 <link href="https://fonts.googleapis.com/css?family=Sigmar+One|Nunito:100,200,600,700,900" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.14.0/css/all.min.css" crossorigin="anonymous">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io/styles/style.min.css?1780584025"><script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io/styles/style.min.css?1783004109"><script>
 function storageFactory(getStorage) {
 
 	const inMemoryStorage = {};
