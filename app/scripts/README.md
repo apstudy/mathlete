@@ -156,14 +156,20 @@ cd ../../mathlete
 git log -2 --format='%h %ad %s' --date=iso
 ```
 
-**3. Do `build.json` and `index.html` agree?** `build_version` names the
-`BUILD shell` commit — the older of the two.
+**3. Do `build.json` and `index.html` agree?** Both must name the **`BUILD shell`
+commit** — the older of the two, *not* `HEAD`. `update-build.py` runs while that
+commit is `HEAD`, and the `UPDATE build` commit is created afterwards. That is
+also the commit holding the assets jsDelivr will serve, so it is the correct
+target.
+
+`build_version` should be the `BUILD shell` hash, and `build_number` should have
+gone up by one.
 
 ```bash
 cat app/build.json
 ```
 
-The CDN hash should be a single value, matching `HEAD`.
+The CDN hash should be a single value — the same `BUILD shell` hash.
 
 ```bash
 grep -o 'apstudy/mathlete@[a-f0-9]*' index.html | sort -u
