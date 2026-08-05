@@ -61,6 +61,77 @@ echo -e "${GREEN}Dependencies available${NC}"
 echo ""
 
 # ============================================
+# Validate upstream branch
+#
+# The ShellShockers branch determines which CDN base makeShellHome.sh injects
+# and which asset rewriter it runs. Building from the wrong branch produces an
+# index.html pointing at another repo's CDN paths, which the rest of this
+# pipeline cannot detect or correct.
+# ============================================
+echo -e "${YELLOW}Validating upstream branch...${NC}"
+
+GAME_REPO="$(cd "$REPO_ROOT/../ShellShockers" 2>/dev/null && pwd)"
+EXPECTED_BRANCH="${SHELL_EXPECTED_BRANCH:-portalBranch}"
+
+if [ -z "$GAME_REPO" ]; then
+    echo -e "${RED}Error: ShellShockers repo not found beside $REPO_ROOT${NC}"
+    exit 1
+fi
+
+CURRENT_BRANCH="$(git -C "$GAME_REPO" branch --show-current)"
+
+if [ "$CURRENT_BRANCH" != "$EXPECTED_BRANCH" ]; then
+    echo -e "${RED}Error: ShellShockers is on '$CURRENT_BRANCH', expected '$EXPECTED_BRANCH'${NC}"
+    echo ""
+    echo -e "${YELLOW}Switch branch:${NC}"
+    echo -e "   ${GREEN}git -C $GAME_REPO switch $EXPECTED_BRANCH${NC}"
+    echo ""
+    echo -e "${YELLOW}Or build from the current branch on purpose:${NC}"
+    echo -e "   ${GREEN}SHELL_EXPECTED_BRANCH=$CURRENT_BRANCH bash app/scripts/build.sh${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}ShellShockers on $CURRENT_BRANCH${NC}"
+echo ""
+
+# ============================================
+# Verify the compile already ran
+#
+# The compile is a prerequisite, not part of this build, and makeShellHome.sh has
+# no `set -e` -- a skipped or failed compile leaves the previous bundle in place
+# and the pipeline still reports success. Compare the bundle against the sources
+# it is built from rather than trusting an exit code. Runs before sync so it
+# fails without having wiped the repo.
+# ============================================
+echo -e "${YELLOW}Verifying compiled bundle is current...${NC}"
+
+GAME_SRC="$GAME_REPO/game/src"
+GAME_BUNDLE="$GAME_REPO/game/home/js/shellshock.js"
+
+if [ ! -f "$GAME_BUNDLE" ]; then
+    echo -e "${RED}Error: compiled bundle not found at $GAME_BUNDLE${NC}"
+    exit 1
+fi
+
+STALE_SRC="$(find "$GAME_SRC" -type f -newer "$GAME_BUNDLE" | head -1)"
+
+if [ -n "$STALE_SRC" ]; then
+    echo -e "${RED}Error: compiled bundle is older than the game source${NC}"
+    echo -e "${RED}The build would ship stale client code.${NC}"
+    echo ""
+    echo -e "${YELLOW}Newer than the bundle:${NC}"
+    echo -e "   $STALE_SRC"
+    echo ""
+    echo -e "${YELLOW}Recompile, then rebuild:${NC}"
+    echo -e "   ${GREEN}cd $GAME_REPO/game${NC}"
+    echo -e "   ${GREEN}sudo ./compile.sh live compress${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}Bundle is newer than all sources${NC}"
+echo ""
+
+# ============================================
 # Step 1: Sync Files
 # ============================================
 echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
@@ -96,6 +167,75 @@ SHORT_HASH="$(git -C "$REPO_ROOT" rev-parse --short HEAD)"
 cd "$SCRIPT_DIR"
 bash "$MAKESHELL_SCRIPT" "$SHORT_HASH"
 cd "$REPO_ROOT"
+echo ""
+
+# ============================================
+# Verify the rewritten CDN paths
+#
+# makeShell.sh only seds the JSCDN line and the checker.js tag, and
+# cdnSearchReplace.js only rewrites *relative* paths. Absolute URLs injected by
+# the upstream makeShellHome.sh therefore survive untouched, producing a build
+# that completes cleanly while loading its assets from another repo. Validate the
+# output here, before anything is committed.
+# ============================================
+echo -e "${YELLOW}Verifying CDN paths in index.html...${NC}"
+
+# A finished index.html legitimately references TWO repos:
+#   - shellbros: the asset paths, written by gh-rewrite-paths-cdn.js upstream.
+#     Both live sites resolve the bundle through shellbros' build.json.
+#   - apstudy/mathlete: the window.JSCDN line and the checker.js tag, which
+#     makeShell.sh pins to this repo's own commit.
+# Anything else means the rewrite pointed somewhere unintended.
+ALLOWED_CDN_REPOS="gh/shellbros/shellbros.github.io gh/apstudy/mathlete"
+MIN_CDN_URLS="${MIN_CDN_URLS:-150}"
+
+ALL_CDN_REPOS="$(grep -oE 'cdn\.jsdelivr\.net/gh/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+' "$REPO_ROOT/index.html" \
+                 | sed 's|cdn\.jsdelivr\.net/||' | sort -u)"
+
+FOREIGN_CDN=""
+for repo in $ALL_CDN_REPOS; do
+    case " $ALLOWED_CDN_REPOS " in
+        *" $repo "*) ;;
+        *) FOREIGN_CDN="$FOREIGN_CDN $repo" ;;
+    esac
+done
+FOREIGN_CDN="$(echo $FOREIGN_CDN)"
+
+# Total jsDelivr references, not per-repo: the asset paths are unpinned, so
+# counting "repo@" occurrences would read near zero on a perfectly good build.
+CDN_COUNT="$(grep -oE 'cdn\.jsdelivr\.net/gh/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+' "$REPO_ROOT/index.html" | wc -l | tr -d ' ')"
+
+if [ -n "$ALLOW_FOREIGN_CDN" ]; then
+    echo -e "${YELLOW}ALLOW_FOREIGN_CDN set -- skipping CDN validation${NC}"
+    if [ -n "$FOREIGN_CDN" ]; then
+        echo -e "${YELLOW}Allowed foreign CDN repos:${NC}"
+        printf "   %s\n" $FOREIGN_CDN
+    fi
+else
+    if [ -n "$FOREIGN_CDN" ]; then
+        echo -e "${RED}Error: index.html references unexpected CDN repos:${NC}"
+        printf "   ${RED}%s${NC}\n" $FOREIGN_CDN
+        echo ""
+        echo -e "${YELLOW}These are injected by makeShellHome.sh on branch '$CURRENT_BRANCH'${NC}"
+        echo -e "${YELLOW}and cannot be corrected downstream. Assets will 404 unless that${NC}"
+        echo -e "${YELLOW}repo mirrors them.${NC}"
+        echo ""
+        echo -e "${YELLOW}Build anyway:${NC}"
+        echo -e "   ${GREEN}ALLOW_FOREIGN_CDN=1 bash app/scripts/build.sh${NC}"
+        exit 1
+    fi
+
+    if [ "$CDN_COUNT" -lt "$MIN_CDN_URLS" ]; then
+        echo -e "${RED}Error: only $CDN_COUNT CDN URLs in index.html${NC}"
+        echo -e "${RED}Expected at least $MIN_CDN_URLS -- the asset rewrite did not run.${NC}"
+        echo ""
+        echo -e "${YELLOW}Override the floor if this is expected:${NC}"
+        echo -e "   ${GREEN}MIN_CDN_URLS=$CDN_COUNT bash app/scripts/build.sh${NC}"
+        exit 1
+    fi
+
+    echo -e "${GREEN}$CDN_COUNT CDN URLs, all from expected repos${NC}"
+fi
 echo ""
 
 # ============================================

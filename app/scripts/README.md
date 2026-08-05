@@ -24,10 +24,36 @@ CDN: `https://cdn.jsdelivr.net/gh/apstudy/mathlete@<short-hash>/`
 
 ## Quick Start
 
+Normal path — builds **both** shells from one compile:
+
 ```bash
-bash app/scripts/build.sh          # run from the repo root
-git push origin main master        # separate + deliberate; build.sh never pushes
-python3 app/scripts/purge.py       # only AFTER the push
+bash app/scripts/build-all.sh
+```
+
+It stops after building and verifying, prints the push and purge commands, and
+pushes nothing. To go all the way in one shot:
+
+```bash
+bash app/scripts/build-all.sh --push
+```
+
+`build-all.sh` compiles the game once, then builds shellbros and mathlete from
+that single bundle so both ship identical bytes, and checks that they match. One
+sudo password at the start; unattended after that.
+
+**Build both, then push both.** If mathlete's guards trip after shellbros has
+already committed, nothing is pushed — you are left with two clean local builds
+and zero live change, never a half-deployed pair.
+
+shellbros is built first because it hosts the assets both live sites resolve
+through: `quizape.com` and `apstudy.github.io` read **shellbros'** `build.json`
+to decide which bundle to load, so building mathlete alone changes nothing for
+either.
+
+To build only this repo, with the compile already current:
+
+```bash
+bash app/scripts/build.sh
 ```
 
 ## Before you run it
@@ -40,8 +66,28 @@ python3 app/scripts/purge.py       # only AFTER the push
 | **sudo password** | `makeShellhome.sh` starts with `sudo ./compile.sh live compress` |
 | Local web server on `localhost` serving `index.php` | `makeShellhome.sh` curls it to produce `index.html` |
 | Sibling `ShellShockers/game/` repo present | Source of everything synced in |
+| **ShellShockers on `portalBranch`** | The branch decides which CDN base `makeShellHome.sh` injects |
 | `python3`, `node`, `git` | Used throughout; `build.sh` validates these |
 | Clean working tree | `build.sh` runs `git add -A` and commits everything present |
+
+### Upstream branch matters
+
+`makeShellHome.sh` lives in the ShellShockers repo and differs per branch — it
+hardcodes the CDN base it injects and which asset rewriter it runs. Building from
+the wrong branch produces an `index.html` whose assets point at **another repo's**
+CDN paths, and nothing downstream can detect or correct that:
+
+- `makeShell.sh` only seds the `window.JSCDN=` line and the `checker.js` tag
+- `cdnSearchReplace.js` only rewrites **relative** paths, so absolute URLs
+  injected upstream pass through untouched
+
+The result is a build that completes cleanly and reports success while most assets
+404. `build.sh` now aborts before sync if the branch is wrong. To build from a
+different branch deliberately:
+
+```bash
+SHELL_EXPECTED_BRANCH=<branch> bash app/scripts/build.sh
+```
 
 ### Pre-flight check
 
@@ -73,7 +119,15 @@ The sibling repo must be there.
 ls ../ShellShockers/game/makeShellhome.sh
 ```
 
-Want: no output from `git status`, `localhost: 200`, and the `ls` finding the file.
+The upstream branch must be `portalBranch`.
+
+```bash
+git -C ../ShellShockers branch --show-current
+```
+
+Want: no output from `git status`, `localhost: 200`, the `ls` finding the file, and
+`portalBranch`. `build.sh` enforces the branch itself, so a mistake there aborts
+rather than shipping.
 
 ### Two interactive prompts
 
@@ -124,9 +178,55 @@ Order matters: step 1 delivers `root_domains.json`, which step 2 consumes.
 Anything else you add at the repo root **will be deleted** on the next build.
 Put it in `app/` or `functions/`, or add it to `WHITELIST` in `sync.py`.
 
+## Build guards
+
+`build.sh` aborts rather than shipping a bad build. Each guard exists because the
+matching failure mode already reached production once, silently.
+
+| Guard | When | Catches | Override |
+|---|---|---|---|
+| Upstream branch | before sync | Wrong ShellShockers branch, which changes the injected CDN base | `SHELL_EXPECTED_BRANCH=<branch>` |
+| Bundle freshness | before sync | Skipped or failed compile shipping stale client code | recompile — no override |
+| CDN paths | after step 3, before any commit | Assets pointing at an unexpected repo, or a rewrite that did not run | `ALLOW_FOREIGN_CDN=1`, `MIN_CDN_URLS=<n>` |
+
+**Bundle freshness** compares `home/js/shellshock.js` against everything in
+`ShellShockers/game/src/`. The compile is a prerequisite rather than part of the
+build, so this runs *before* sync and fails without having wiped the repo. There
+is deliberately no override — a stale bundle is never correct. Fix it by
+recompiling, or just use `build-all.sh`, which compiles first:
+
+```bash
+cd ../ShellShockers/game
+```
+
+```bash
+sudo ./compile.sh live compress
+```
+
+**CDN paths** checks two things. First, that every
+`cdn.jsdelivr.net/gh/<owner>/<repo>` in `index.html` is one of two expected repos:
+
+- `gh/shellbros/shellbros.github.io` — the asset paths, written upstream by
+  `gh-rewrite-paths-cdn.js`. Both live sites resolve the bundle through
+  shellbros' `build.json`, so this is correct, not a bug.
+- `gh/apstudy/mathlete` — the `window.JSCDN` line and the `checker.js` tag, which
+  `makeShell.sh` pins to this repo's own commit.
+
+Second, that at least `MIN_CDN_URLS` (default 150) jsDelivr URLs are present. A
+healthy build has ~195. That check matters because "no unexpected repos" also
+passes when the rewrite never ran at all. It counts *total* jsDelivr references
+rather than per-repo, because the asset paths are unpinned — counting `repo@`
+occurrences would read near zero on a perfectly good build.
+
+Neither `makeShell.sh` nor `cdnSearchReplace.js` can fix foreign URLs — the first
+only seds the `JSCDN` line and the `checker.js` tag, the second only rewrites
+*relative* paths. So absolute URLs injected upstream reach production untouched
+unless this guard stops them.
+
 ## Verifying a build
 
-Nothing in the pipeline fails loudly on a stale compile, so check by hand:
+The guards above cover the failure modes that have actually bitten. To confirm a
+build by hand: 
 
 **1. Did the game actually recompile?** The bundle should be minutes old.
 
