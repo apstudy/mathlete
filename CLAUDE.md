@@ -207,20 +207,18 @@ fixing the cause. Details in `app/scripts/README.md`.
    `shellbros.github.io@<sha>`. Last writer wins, and the Loader's runs lazily on first
    `cdnUrl()`. This produced live pages loading assets from two different commits. Left
    as-is deliberately — do not "tidy" one away without tracing both.
-2. **`purge.py` targets `index.js`, which does not exist.** jsDelivr's purge endpoint
-   returns success for any path, so that entry has always been a silent no-op.
-3. **`purge.py` purges the unpinned `app/build.json`**, but `checker.js` fetches
-   `@main/app/build.json`. Different URLs are different cache objects. Purge both.
-   This is a mathlete-only mismatch — shellbros' code reads the unpinned URL, so
-   its `purge.py` is already correct. Do not "fix" that one to match this.
-3b. **A purge can be silently rate-limited.** jsDelivr returns
-   `"status": "finished"` with `"throttled": true` when you re-purge the same path
-   in quick succession, and `purge.py` prints a tick either way. So "purged
-   successfully" is never proof the edge refetched. Confirm by reading the file
-   back:
-   `curl -s https://cdn.jsdelivr.net/gh/apstudy/mathlete@main/app/build.json`
-   If it is stale and the purge said finished, you were throttled — wait rather
-   than re-purging, which extends the throttle.
+2. **Every jsDelivr URL is its own cache object.** `/gh/o/r/f` and
+   `/gh/o/r@main/f` are two caches of the same file; purging one does nothing for
+   the other. `checker.js` here reads **`@main/app/build.json`**, while shellbros'
+   reads the **unpinned** one — so the two `purge.py` files target different URLs
+   on purpose. Do not "align" them. Commit-pinned `@<sha>` URLs are immutable and
+   never need purging.
+3. **A purge can be silently rate-limited.** jsDelivr answers
+   `"status": "finished"` with `"throttled": true` when the same path is purged
+   repeatedly in quick succession, and that is indistinguishable from success.
+   `purge.py` therefore reads `build.json` back and compares it to the local one,
+   exiting non-zero if the edge is still stale. If it reports STALE after a
+   throttle, wait — re-purging extends the throttle rather than clearing it.
 4. **`makeShellHome.sh` has no `set -e`.** A failed step prints an error and keeps
    going, so the pipeline can report success while shipping stale output. The freshness
    guard is what stops that.
