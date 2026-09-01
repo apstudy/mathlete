@@ -33,8 +33,13 @@ assets from `shellbros/shellbros.github.io`, not from this repo.** The upstream
 
 A healthy `index.html` therefore references **two** repos:
 
-- `gh/shellbros/shellbros.github.io` — ~193 asset URLs
-- `gh/apstudy/mathlete` — exactly 2, the `window.JSCDN` line and the `checker.js` tag
+- `gh/shellbros/shellbros.github.io` — ~19 asset URLs
+- `gh/apstudy/mathlete` — 2, the `window.JSCDN` line and the `checker.js` tag
+
+That count used to be ~193. The Vue 3 migration precompiled the templates into
+`js/home.js` and moved asset resolution to **runtime** via `window.JSCDN`, so the
+built `index.html` no longer carries them. A build-time count near 20 is healthy
+now; near 0 means the rewrite did not run.
 
 Consequences worth remembering:
 
@@ -125,6 +130,61 @@ Four contexts must keep working. Test changes against all of them:
 `app/checker.js` probes only when the page host is unusable, so `*.pages.dev` embeds
 keep using their own host and are unaffected.
 
+## Vue 3 (migrated 2026-09-01)
+
+The client is Vue **3.5.41**, runtime-only. Things that follow from that:
+
+- **The compile emits TWO bundles**, not one: `js/shellshock.js` (the game) and
+  `js/home.js` (the Vue home/UI). `compile.sh` builds both. The freshness guard in
+  `build.sh` checks **both** — a compile that produced one and failed on the other
+  used to pass.
+- **Templates are precompiled** by `game/precompile-templates.mjs`, an esbuild
+  plugin wired into `build.mjs`. That is what makes runtime-only Vue viable. If
+  that plugin is ever reverted, the Vue build choice must be reverted with it or
+  the app mounts against a Vue that cannot compile a template and renders nothing.
+- **`@vue/compiler-dom` must be installed** in `../ShellShockers`. It is declared
+  in `package.json` but was missing locally once, which fails the compile with
+  `ERR_MODULE_NOT_FOUND`. Fix: `npm install` in that repo.
+- **Production vs dev Vue is chosen by `?build=1`.** `makeShellHome.sh` appends it
+  to the curl; `home/includes/header/inc-cache-buster-php-vars.php` keys off it.
+  Hostname alone cannot tell "being built" from "a developer on localhost", and
+  before this every shipped shell got the 415 KB dev build instead of the 108 KB
+  prod one. Local dev still gets the dev build, deliberately.
+
+## standalone-mathlete.html
+
+Generated every build by `app/scripts/makeStandalone.js`, beside `index.html`.
+
+`index.html` assumes it is served from a real origin. `standalone-*.html` is the
+same page made safe to run with **no origin** — a `blob:` URL, an `about:blank`
+iframe, `file://` — which is how it gets embedded (Google AI Studio previews and
+similar). Three differences:
+
+1. Commit-pinned CDN URLs are un-pinned to `@main`, so a copy handed to someone
+   keeps working after later builds instead of freezing on the build that made it.
+2. Relative refs are absolutised — a `blob:` page has no base URL to resolve them.
+3. **The socket host is baked in** as `dynamicContentRoot`, so it resolves
+   synchronously instead of waiting on `checker.js` to finish probing. It uses
+   `dynamicContentRoot` (step 2 of `wssHost()`) rather than `overrideWssBase`,
+   because `checker.js` nulls that on every run and would clobber it.
+
+The generator verifies its own output and fails the build if anything relative or
+commit-pinned survives. Verified working in a real blob: `location.host` empty,
+`Connected to wss://shellbros.pages.dev/matchmaker/`.
+
+`standalone-shellbros.html` in the sibling repo is the one to hand out — all its
+URLs come from a single repo, whereas this one spans two.
+
+## Known broken, deliberately
+
+- **`data/*.json` 404s everywhere.** `makeShellHome.sh` rsyncs with
+  `--exclude 'data/'`, so `housePromo.json`, `shellNews.json`, `shellYouTube.json`
+  and `twitchStreams.json` never reach either shell. House promos, news, YouTube
+  and Twitch panels are empty on the live sites too. Long-standing; not a
+  regression from the Vue 3 or standalone work.
+- **Firebase auth does not work off an authorized domain.** In `blob:` and
+  `googleusercontent.com` contexts players get anonymous sessions.
+
 ## Guards in `build.sh`
 
 Every failure mode below shipped silently at least once — success reported, commits
@@ -134,7 +194,7 @@ made, live. So the pipeline validates its **output**, not just its inputs.
 |---|---|---|
 | Branch | before sync | Upstream on the wrong branch (wrong CDN base / rewriter) |
 | Freshness | before sync | A stale bundle when the compile didn't run |
-| **Output** | after rewrite, before commit | Unexpected CDN repos in `index.html`, or a rewrite that didn't run (floor 150; healthy ≈ 195) |
+| **Output** | after rewrite, before commit | Unexpected CDN repos in `index.html`, or a rewrite that didn't run (floor 12; healthy ≈ 21) |
 
 The output guard matters most — it is cause-agnostic, so it catches failures the input
 guards don't anticipate. Overrides: `ALLOW_FOREIGN_CDN=1`, `MIN_CDN_URLS=<n>`. Prefer
@@ -151,6 +211,16 @@ fixing the cause. Details in `app/scripts/README.md`.
    returns success for any path, so that entry has always been a silent no-op.
 3. **`purge.py` purges the unpinned `app/build.json`**, but `checker.js` fetches
    `@main/app/build.json`. Different URLs are different cache objects. Purge both.
+   This is a mathlete-only mismatch — shellbros' code reads the unpinned URL, so
+   its `purge.py` is already correct. Do not "fix" that one to match this.
+3b. **A purge can be silently rate-limited.** jsDelivr returns
+   `"status": "finished"` with `"throttled": true` when you re-purge the same path
+   in quick succession, and `purge.py` prints a tick either way. So "purged
+   successfully" is never proof the edge refetched. Confirm by reading the file
+   back:
+   `curl -s https://cdn.jsdelivr.net/gh/apstudy/mathlete@main/app/build.json`
+   If it is stale and the purge said finished, you were throttled — wait rather
+   than re-purging, which extends the throttle.
 4. **`makeShellHome.sh` has no `set -e`.** A failed step prints an error and keeps
    going, so the pipeline can report success while shipping stale output. The freshness
    guard is what stops that.
