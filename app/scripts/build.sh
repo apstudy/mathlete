@@ -106,29 +106,39 @@ echo ""
 echo -e "${YELLOW}Verifying compiled bundle is current...${NC}"
 
 GAME_SRC="$GAME_REPO/game/src"
-GAME_BUNDLE="$GAME_REPO/game/home/js/shellshock.js"
 
-if [ ! -f "$GAME_BUNDLE" ]; then
-    echo -e "${RED}Error: compiled bundle not found at $GAME_BUNDLE${NC}"
-    exit 1
-fi
+# compile.sh emits two bundles: shellshock.js (the game) and home.js (the Vue 3
+# home/UI). Checking only one would pass a compile that produced that bundle and
+# failed on the other.
+GAME_BUNDLES="$GAME_REPO/game/home/js/shellshock.js $GAME_REPO/game/home/js/home.js"
 
-STALE_SRC="$(find "$GAME_SRC" -type f -newer "$GAME_BUNDLE" | head -1)"
+for GAME_BUNDLE in $GAME_BUNDLES; do
+    if [ ! -f "$GAME_BUNDLE" ]; then
+        echo -e "${RED}Error: compiled bundle not found at $GAME_BUNDLE${NC}"
+        echo ""
+        echo -e "${YELLOW}Recompile, then rebuild:${NC}"
+        echo -e "   ${GREEN}cd $GAME_REPO/game${NC}"
+        echo -e "   ${GREEN}sudo ./compile.sh live compress${NC}"
+        exit 1
+    fi
 
-if [ -n "$STALE_SRC" ]; then
-    echo -e "${RED}Error: compiled bundle is older than the game source${NC}"
-    echo -e "${RED}The build would ship stale client code.${NC}"
-    echo ""
-    echo -e "${YELLOW}Newer than the bundle:${NC}"
-    echo -e "   $STALE_SRC"
-    echo ""
-    echo -e "${YELLOW}Recompile, then rebuild:${NC}"
-    echo -e "   ${GREEN}cd $GAME_REPO/game${NC}"
-    echo -e "   ${GREEN}sudo ./compile.sh live compress${NC}"
-    exit 1
-fi
+    STALE_SRC="$(find "$GAME_SRC" -type f -newer "$GAME_BUNDLE" | head -1)"
 
-echo -e "${GREEN}Bundle is newer than all sources${NC}"
+    if [ -n "$STALE_SRC" ]; then
+        echo -e "${RED}Error: $(basename "$GAME_BUNDLE") is older than the game source${NC}"
+        echo -e "${RED}The build would ship stale client code.${NC}"
+        echo ""
+        echo -e "${YELLOW}Newer than the bundle:${NC}"
+        echo -e "   $STALE_SRC"
+        echo ""
+        echo -e "${YELLOW}Recompile, then rebuild:${NC}"
+        echo -e "   ${GREEN}cd $GAME_REPO/game${NC}"
+        echo -e "   ${GREEN}sudo ./compile.sh live compress${NC}"
+        exit 1
+    fi
+done
+
+echo -e "${GREEN}Both bundles are newer than all sources${NC}"
 echo ""
 
 # ============================================
@@ -187,7 +197,13 @@ echo -e "${YELLOW}Verifying CDN paths in index.html...${NC}"
 #     makeShell.sh pins to this repo's own commit.
 # Anything else means the rewrite pointed somewhere unintended.
 ALLOWED_CDN_REPOS="gh/shellbros/shellbros.github.io gh/apstudy/mathlete"
-MIN_CDN_URLS="${MIN_CDN_URLS:-150}"
+# Re-baselined for the Vue 3 migration. Templates are precompiled into
+# js/home.js and assets now resolve at RUNTIME via window.JSCDN, so the built
+# index.html no longer carries ~193 rewritten URLs -- it carries ~17-19. A
+# correct build measured 17 from gh-rewrite-paths-cdn.js plus the 2 makeShell.sh
+# injects. The floor still catches the case it was written for: a rewrite that
+# did not run at all lands at 0.
+MIN_CDN_URLS="${MIN_CDN_URLS:-12}"
 
 ALL_CDN_REPOS="$(grep -oE 'cdn\.jsdelivr\.net/gh/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+' "$REPO_ROOT/index.html" \
                  | sed 's|cdn\.jsdelivr\.net/||' | sort -u)"
