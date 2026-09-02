@@ -231,6 +231,12 @@ fixing the cause. Details in `app/scripts/README.md`.
    the `BUILD shell` commit is `HEAD`, so its edit lands in the following `UPDATE build`
    commit. Two commits per build is correct, not a bug.
 
+## Open work
+
+**`app/HANDOFF.md`** carries whatever is unfinished — open bugs with their scope and
+the evidence already gathered, so they are not re-diagnosed from scratch. Read it
+before starting anything; delete entries as they are closed.
+
 ## Related docs
 
 - `app/scripts/README.md` — per-script runbook, guards, verification steps
