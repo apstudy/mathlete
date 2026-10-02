@@ -22,62 +22,67 @@ the next build wipes and regenerates it. Do not commit it by hand.
 
 ---
 
-## 1. OPEN BUG — bare `img/…` paths break off-origin
+## 1. FIXED IN SOURCE, NOT YET BUILT -- bare `img/...` paths off-origin
 
-**Confirmed.** Reported as broken grenade icons on a third-party host.
+Fixed on `../ShellShockers` `portalBranch` in `183468859` (committed locally,
+**not pushed**). Still needs a recompile and a rebuild of both shells before it
+is live -- nothing has changed on the live sites yet.
 
-The host serves the page from its own jsDelivr repo (`bobydob/get`, unrelated to
-us), so the document's base URL is theirs. Any **relative** URL the bundle emits
-resolves into that repo, which has none of our assets.
+Was: the bundle emitted relative `img/...` URLs, which resolve against the
+host's document base off-origin and 404. Reported as broken grenade icons on a
+third-party host.
 
-```
-built:    <img src="img/ico_grenadeEmpty.webp?v=1">        (src/home/components/game/game-screen.js:182)
-resolves: cdn.jsdelivr.net/gh/bobydob/get@8a695dd3…/img/…  -> 404
-```
+The scope recorded here previously (44 literals / 26 files) was measured before
+develop was merged into `portalBranch`; the real count at fix time was 147
+occurrences across 39 files.
 
-Verified the asset itself is fine — `@df78f33/img/ico_grenadeEmpty.webp` is **200**.
-The path is the problem, not the file.
+### What was done
 
-`makeStandalone.js` cannot fix this: it only rewrites the static HTML, and these
-literals live inside compiled Vue templates and imperative JS in the bundle.
+`cdnPath()` prefixes `window.JSCDN` when set and returns the path untouched when
+it is not, so shellshock.io, CrazyGames, local dev and server-side keep their
+existing behaviour. It passes absolute URLs through unchanged and is idempotent.
 
-### Scope
+Duplicated deliberately as `src/home/cdn.js` and `src/shared/cdn.js` -- `home.js`
+is an esbuild ESM bundle, `shellshock.js` is concatenated by `compile.sh`, so
+they cannot share a module. Change both or neither.
 
-**44 distinct bare `img/…` literals across 26 files** in `../ShellShockers/game/src/`:
+Applied at choke points, not at every literal:
 
-```
-src/home/components/{home,equip,shared,game}/*.js
-src/home/root/{computed,store-methods,vue-data,template}.js
-src/client/{clientGame,clientMetaGame,playerChallenges}.js
-src/mapeditor/main.js
-src/services/twitchStreamScraper.js
-```
+| Choke point | Covers |
+|---|---|
+| `lazyLoadDirective` in `src/home/globals.js` | every `v-lazyload :data-src` image |
+| `$cdn` on `globalProperties` | template `src=` / `href=` (49 sites) |
+| `buttonIcon()` in `settings-gamepad-binder.js` | controller glyph HTML, rendered via `v-html` |
 
-Re-list with:
+Left relative on purpose, so do not "finish" them: values prefixed downstream at
+their binding or by the directive; `services/twitchStreamScraper.js:6`, which is
+a filesystem path and not a URL; and `src/mapeditor/`, a separate bundle not
+served on the portal.
 
-```bash
-grep -rlE "['\"\`]img/[A-Za-z0-9_./{}$-]+['\"\`]" ../ShellShockers/game/src/
-```
+Markup inside HTML comment blocks was also left alone. 17 candidate sites sit in
+commented-out regions (the whole kotc instruction popup in `root/template.js`,
+parts of `game-screen.js` and `equip-screen.js`); Vue strips comments, so those
+never reach the DOM. Verified by running the precompiler on the pre-change file
+and getting the same empty result.
 
-### The fix pattern
+### Verified
 
-Already proven in `src/client/playerActor.js:27` (the stamps commit, `11263e881`):
+Both helpers agree on 20 shared cases; `cdnPath` passes 12 behavioural cases
+(no-base passthrough, leading-slash, query, SVG fragment, remote URL, data URI,
+idempotence). `@vue/compiler-dom` confirmed to emit `_ctx.$cdn(...)`, so `$cdn`
+resolves in precompiled templates. Home bundle resolves; concatenated game
+bundle parses with one `cdnPath` definition and 5 call sites.
 
-```js
-let baseUrl = (typeof window !== 'undefined' && window.JSCDN) ? window.JSCDN : '';
-img.src = baseUrl + 'img/ico_grenadeEmpty.webp?v=1';
-```
+**Not verified:** nothing has been run in a browser. The off-origin fix itself is
+unproven until a build is loaded on a failing host.
 
-`window.JSCDN` was **verified correct** on the failing host
-(`https://cdn.jsdelivr.net/gh/apstudy/mathlete@df78f33/`), so prefixing genuinely
-resolves these. That was checked before committing to this approach — if JSCDN had
-been wrong or empty, prefixing would have moved 44 broken URLs to a new wrong base
-and fixed nothing.
+### Dependency note
 
-Needs a recompile and a rebuild of both shells. Touches shared game source, so it
-ships to every target including CrazyGames.
-
----
+`qrcode-generator` arrived in `package.json` with the develop merge (gift links)
+and was missing from `../ShellShockers/node_modules`, which fails the compile --
+same trap as `@vue/compiler-dom` before it. **Resolved:** `npm install` run
+2026-10-02, 2.0.4 installed, `package-lock.json` unchanged. The home bundle now
+resolves with no externals but Vue.
 
 ## 2. UNRESOLVED — stamps not rendering
 
