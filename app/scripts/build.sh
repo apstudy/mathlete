@@ -71,9 +71,7 @@ echo ""
 echo -e "${YELLOW}Validating upstream branch...${NC}"
 
 GAME_REPO="$(cd "$REPO_ROOT/../ShellShockers" 2>/dev/null && pwd)"
-# Space-separated allowlist. portalLazySkinsTurnstile is temporary: drop it
-# once that work is merged into portalBranch.
-EXPECTED_BRANCH="${SHELL_EXPECTED_BRANCH:-portalBranch portalLazySkinsTurnstile}"
+EXPECTED_BRANCH="${SHELL_EXPECTED_BRANCH:-portalBranch}"
 
 if [ -z "$GAME_REPO" ]; then
     echo -e "${RED}Error: ShellShockers repo not found beside $REPO_ROOT${NC}"
@@ -82,11 +80,11 @@ fi
 
 CURRENT_BRANCH="$(git -C "$GAME_REPO" branch --show-current)"
 
-if [[ " $EXPECTED_BRANCH " != *" $CURRENT_BRANCH "* ]]; then
-    echo -e "${RED}Error: ShellShockers is on '$CURRENT_BRANCH', expected one of '$EXPECTED_BRANCH'${NC}"
+if [ "$CURRENT_BRANCH" != "$EXPECTED_BRANCH" ]; then
+    echo -e "${RED}Error: ShellShockers is on '$CURRENT_BRANCH', expected '$EXPECTED_BRANCH'${NC}"
     echo ""
     echo -e "${YELLOW}Switch branch:${NC}"
-    echo -e "   ${GREEN}git -C $GAME_REPO switch portalBranch${NC}"
+    echo -e "   ${GREEN}git -C $GAME_REPO switch $EXPECTED_BRANCH${NC}"
     echo ""
     echo -e "${YELLOW}Or build from the current branch on purpose:${NC}"
     echo -e "   ${GREEN}SHELL_EXPECTED_BRANCH=$CURRENT_BRANCH bash app/scripts/build.sh${NC}"

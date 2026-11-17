@@ -30,9 +30,7 @@ SHELLBROS="$ROOT/shellbros.github.io"
 UPSTREAM="$ROOT/ShellShockers"
 GAME="$UPSTREAM/game"
 
-# Space-separated allowlist. portalLazySkinsTurnstile is temporary: drop it
-# once that work is merged into portalBranch.
-EXPECTED_BRANCH="${SHELL_EXPECTED_BRANCH:-portalBranch portalLazySkinsTurnstile}"
+EXPECTED_BRANCH="${SHELL_EXPECTED_BRANCH:-portalBranch}"
 BUILD_URL="${BUILD_URL:-localhost}"
 DO_PUSH=0
 
@@ -72,9 +70,9 @@ done
 echo -e "${GREEN}Both repos and the game tree are present${NC}"
 
 CURRENT_BRANCH="$(git -C "$UPSTREAM" branch --show-current)"
-if [[ " $EXPECTED_BRANCH " != *" $CURRENT_BRANCH "* ]]; then
-    echo -e "${RED}Error: ShellShockers is on '$CURRENT_BRANCH', expected one of '$EXPECTED_BRANCH'${NC}"
-    echo -e "${YELLOW}Switch:${NC}   ${GREEN}git -C $UPSTREAM switch portalBranch${NC}"
+if [ "$CURRENT_BRANCH" != "$EXPECTED_BRANCH" ]; then
+    echo -e "${RED}Error: ShellShockers is on '$CURRENT_BRANCH', expected '$EXPECTED_BRANCH'${NC}"
+    echo -e "${YELLOW}Switch:${NC}   ${GREEN}git -C $UPSTREAM switch $EXPECTED_BRANCH${NC}"
     echo -e "${YELLOW}Override:${NC} ${GREEN}SHELL_EXPECTED_BRANCH=$CURRENT_BRANCH bash app/scripts/build-all.sh${NC}"
     exit 1
 fi
