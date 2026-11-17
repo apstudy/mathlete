@@ -1,4 +1,4 @@
-# HANDOFF — 2026-09-02
+# HANDOFF — 2026-11-17
 
 Open work and live state. Standing context is in `CLAUDE.md` (this repo) and
 `../shellbros.github.io/CLAUDE.md`. **Read those first** — this file only covers
@@ -8,81 +8,97 @@ what is unfinished.
 
 | Repo | Branch | Unpushed | Live |
 |---|---|---|---|
-| `ShellShockers` | `portalBranch` | 0 | — |
-| `shellbros.github.io` | `main` | 1 | build **41** (`8555cdd`) |
-| `mathlete` | `main` | 1 | build **51** (`df78f33`) |
+| `ShellShockers` | `portalLazySkinsTurnstile` | whole branch (local only) | — |
+| `shellbros.github.io` | `main` | 3 | build **43** (`499c752`) |
+| `mathlete` | `main` | 4 | build **53** (`cc01485`) |
 
-The 1 unpushed commit in each shell is the `purge.py` rewrite plus its doc update.
-It changes no served file — verify with `git show --stat HEAD` before pushing.
+Each shell's unpushed commits are the branch-guard allowlist change plus the
+2026-11-17 build of `portalLazySkinsTurnstile` (shellbros build 44, mathlete build
+54); mathlete also has this file's update. Built and checked, **not live** — see 1.
 
-`mathlete` also has `standalone-mathlete.html` dirty. That is a build artifact;
-the next build wipes and regenerates it. Do not commit it by hand.
+`portalLazySkinsTurnstile` and 46 `portalBranch` commits exist only on this Mac.
 
 **Never push without asking.**
 
 ---
 
-## 1. FIXED IN SOURCE, NOT YET BUILT -- bare `img/...` paths off-origin
+## 1. READY, NOT LIVE — lazy skins + Turnstile build
 
-Fixed on `../ShellShockers` `portalBranch` in `183468859` (committed locally,
-**not pushed**). Still needs a recompile and a rebuild of both shells before it
-is live -- nothing has changed on the live sites yet.
+`portalLazySkinsTurnstile` = `portalBranch` + `origin/testLazySkinsTurnstile`,
+merged in `3628ab014`. Built 2026-11-17 and verified; held back from going live.
+Do **not** build the test branch directly: it comes from `develop` and has none
+of the portal code (`makeShellHome.sh`, `cdn.js`, `wssHost()`, `?build=1`).
 
-Was: the bundle emitted relative `img/...` URLs, which resolve against the
-host's document base off-origin and 404. Reported as broken grenade icons on a
-third-party host.
+The branch guards in `build-all.sh` and both `build.sh` files accept it
+temporarily. Remove it from the allowlists once the work is merged into
+`portalBranch`.
 
-The scope recorded here previously (44 literals / 26 files) was measured before
-develop was merged into `portalBranch`; the real count at fix time was 147
-occurrences across 39 files.
+### Checked and fine
 
-### What was done
+- Game protocol unchanged, so the client can ship before or after the servers.
+  The join start waits at most 3 s for skins (`JOIN_SKIN_WAIT_MS`).
+- Lazy skins use relative `models/lazy/` URLs. Both shells ship that folder, so
+  `pages.dev` and `github.io` resolve their own copy. Off-origin (blob, copies)
+  the manifest 404s and the game falls back to the full load, by design.
+- `?portalTest` lockdown does not affect the standalone pages: they bake
+  `dynamicContentRoot` directly.
+- Turnstile: the four unblock hostnames (`shellbros.pages.dev`,
+  `mathlete.pages.dev`, `shellbros.github.io`, `apstudy.github.io`) were added
+  to the `0x4AAAAAAFyfPJS0...` widget on 2026-11-17. Services picks the key by
+  socket Origin and overrides the page's key, so no rebuild was needed.
 
-`cdnPath()` prefixes `window.JSCDN` when set and returns the path untouched when
-it is not, so shellshock.io, CrazyGames, local dev and server-side keep their
-existing behaviour. It passes absolute URLs through unchanged and is idempotent.
+### Before going live
 
-Duplicated deliberately as `src/home/cdn.js` and `src/shared/cdn.js` -- `home.js`
-is an esbuild ESM bundle, `shellshock.js` is concatenated by `compile.sh`, so
-they cannot share a module. Change both or neither.
+- [ ] Admin, Badguys → Turnstile: last sync has no error and the widget lists
+      the four hostnames.
+- [ ] Rollback ready: `git revert` the two build commits in each shell, then
+      push and purge. A real browser test before launch is not possible (a
+      preview still reads the live `build.json`), so test right after.
+- [ ] After launch, in a private window on `shellbros.pages.dev`: grenade icons
+      show, skins load, and the `turnstileRequired` reply carries a `siteKey`.
+      That also closes the img-path fix (`183468859`), live since build 53 but
+      never verified in a browser.
 
-Applied at choke points, not at every literal:
+### After launch: measure the Google Sites "Alt" button
 
-| Choke point | Covers |
-|---|---|
-| `lazyLoadDirective` in `src/home/globals.js` | every `v-lazyload :data-src` image |
-| `$cdn` on `globalProperties` | template `src=` / `href=` (49 sites) |
-| `buttonIcon()` in `settings-gamepad-binder.js` | controller glyph HTML, rendered via `v-html` |
+Seen on `sites.google.com/view/classroom6x/shell-shockers`, which has two buttons:
 
-Left relative on purpose, so do not "finish" them: values prefixed downstream at
-their binding or by the directive; `services/twitchStreamScraper.js:6`, which is
-a filesystem path and not a URL; and `src/mapeditor/`, a separate bundle not
-served on the portal.
+| Button | Opens | Origin | Turnstile |
+|---|---|---|---|
+| FULLSCREEN | about:blank → iframe `apstudy.github.io/mathlete/` | `apstudy.github.io` | covered |
+| FULLSCREEN (Alt) | `blob:` built from `bobydob/get@8a695dd/ss10.xml` | `<n>-atari-embeds.googleusercontent.com` | **not covered** |
 
-Markup inside HTML comment blocks was also left alone. 17 candidate sites sit in
-commented-out regions (the whole kotc instruction popup in `root/template.js`,
-parts of `game-screen.js` and `equip-screen.js`); Vue strips comments, so those
-never reach the DOM. Verified by running the precompiler on the pre-change file
-and getting the same empty result.
+`ss10.xml` is a frozen copy of `standalone-mathlete.html` that loads our `@main`
+bundles but has no `TURNSTILE_SITEKEY`. In Block (or Auto during a swarm),
+first-time players using Alt are refused. Existing players are unaffected.
 
-### Verified
+No safe hostname fixes it: the `<n>` varies per site, `atari-embeds` does not
+match it as a parent domain, and only `googleusercontent.com` would, which
+lets any Google-hosted page use the key. Whether Turnstile runs inside a
+`blob:` at all is also unknown. Do **not** exempt origins on the server: the
+Origin header can be faked, so that would bypass the gate.
 
-Both helpers agree on 20 shared cases; `cdnPath` passes 12 behavioural cases
-(no-base passthrough, leading-slash, query, SVG fragment, remote URL, data URI,
-idempotence). `@vue/compiler-dom` confirmed to emit `_ctx.$cdn(...)`, so `$cdn`
-resolves in precompiled templates. Home bundle resolves; concatenated game
-bundle parses with one `cdnPath` definition and 5 call sites.
+- [ ] After launch, check how much `googleusercontent.com` traffic shows in the
+      no-key domain counts (`countNoKeyDomain`).
+- [ ] If it is significant, add `googleusercontent.com` to a widget as a trial
+      and test the Alt button in a private window. Keep it only if Turnstile
+      works there.
 
-**Not verified:** nothing has been run in a browser. The off-origin fix itself is
-unproven until a build is loaded on a failing host.
+### Other notes
 
-### Dependency note
+- **The lazy-skins kill switch does not reach the shells.** They ship their own
+  `models/lazy/manifest.json`. Set `"lazy": false` there in both shells, push and
+  purge, and set `game/tools/lazySkinsSetting.json` too or the next build undoes it.
+- **The shells bake Cloudflare's test key** (`1x00000000000000000000AA`), because
+  the build curls `localhost`. Harmless for the four covered hosts, since services
+  sends the real key. It should still be `''` or a real key.
+- Standalone pages report Turnstile platform `poki` (`dynamicContentRoot` is
+  set). That only skews counts.
+- Frozen copies like `ss10.xml` run new `@main` bundles inside old HTML. A build
+  that changes what the bundle expects from the page will break them, and we
+  cannot update them.
 
-`qrcode-generator` arrived in `package.json` with the develop merge (gift links)
-and was missing from `../ShellShockers/node_modules`, which fails the compile --
-same trap as `@vue/compiler-dom` before it. **Resolved:** `npm install` run
-2026-10-02, 2.0.4 installed, `package-lock.json` unchanged. The home bundle now
-resolves with no externals but Vue.
+---
 
 ## 2. UNRESOLVED — stamps not rendering
 
@@ -133,7 +149,7 @@ observed aborted early), but the hole is real.
 
 ---
 
-## Done this session, for context
+## Done 2026-09-02, for context
 
 - Vue 3.5.41 migration verified through the build; guards re-baselined for it
   (CDN floor 150 → 12, since assets now resolve at runtime)
