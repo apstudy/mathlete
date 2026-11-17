@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<!--
+Launch harness: opens the game the same two ways the classroom6x Google Sites
+embed does, so the off-origin contexts can be tested on purpose.
+
+  1. about:blank + iframe  - the "FULLSCREEN" button. The game runs in an
+                             iframe, so its origin is the iframe's host.
+  2. blob: from HTML       - the "FULLSCREEN (Alt)" button. The page is fetched,
+                             turned into a blob and opened. The game runs in the
+                             blob itself, which inherits THIS page's origin.
+  3. about:blank, written  - the same HTML written straight into about:blank,
+                             also inheriting this page's origin.
+
+The origin under test is whatever serves this file. To test locally, open it
+from 127.0.0.1, NOT localhost: mode 3 takes this page's URL, and servers.js
+treats a "localhost" hostname as local dev (ws://localhost/matchmaker/). Or
+paste it into a Google Sites "Embed code" box to reproduce the
+<n>-atari-embeds.googleusercontent.com origin exactly.
+
+Left out of the original on purpose: the Google Classroom tab disguise and the
+IMA ad-request rewrite. Neither is needed to test, and the second misreports
+where ads are shown.
+
+Only point it at pages you trust: modes 2 and 3 run the fetched page with this
+page's origin.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Launch harness</title>
+<style>
+	body { font-family: system-ui, sans-serif; margin: 16px; max-width: 720px; }
+	label { display: block; margin-top: 12px; font-weight: 600; }
+	input { width: 100%; box-sizing: border-box; padding: 6px; font: inherit; }
+	button { margin: 12px 8px 0 0; padding: 8px 14px; font: inherit; cursor: pointer; }
+	#log { margin-top: 16px; padding: 8px; background: #f3f3f3; white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>Launch harness</h1>
+<p>This page's origin: <code id="origin"></code></p>
+
+<label for="iframeUrl">1. Page to iframe</label>
+<input id="iframeUrl" value="https://shellbros.pages.dev/">
+
+<label for="htmlUrl">2 and 3. HTML (or Google gadget XML) to run directly</label>
+<input id="htmlUrl" value="https://cdn.jsdelivr.net/gh/shellbros/shellbros.github.io@main/standalone-shellbros.html">
+
+<div>
+	<button id="btnIframe">1. about:blank + iframe</button>
+	<button id="btnBlob" disabled>2. blob: (Alt)</button>
+	<button id="btnWrite" disabled>3. about:blank, written</button>
+	<button id="btnReload">Reload HTML</button>
+</div>
+
+<div id="log"></div>
+
+<script>
+(function () {
+	var logEl = document.getElementById('log');
+	var htmlInput = document.getElementById('htmlUrl');
+	var blobBtn = document.getElementById('btnBlob');
+	var writeBtn = document.getElementById('btnWrite');
+	var readyHtml = null;
+
+	function log (msg) {
+		logEl.textContent += new Date().toLocaleTimeString() + '  ' + msg + '\n';
+	}
+
+	function isHttpUrl (value) {
+		try {
+			var u = new URL(value);
+			return u.protocol === 'https:' || u.protocol === 'http:';
+		} catch (e) {
+			return false;
+		}
+	}
+
+	// Popups must open inside the click, so the HTML is fetched ahead of time,
+	// as the original embed does.
+	async function loadHtml () {
+		readyHtml = null;
+		blobBtn.disabled = writeBtn.disabled = true;
+		var url = htmlInput.value.trim();
+		if (!isHttpUrl(url)) {
+			log('HTML URL must be http(s)');
+			return;
+		}
+		log('Fetching ' + url);
+		try {
+			var res = await fetch(url, { cache: 'no-cache' });
+			if (!res.ok) throw new Error('HTTP ' + res.status);
+			var text = await res.text();
+			// Google gadget XML (like ss10.xml): the page is inside <Content>
+			if (/^\s*<\?xml/.test(text)) {
+				var xml = new DOMParser().parseFromString(text, 'application/xml');
+				var content = xml.querySelector('Content');
+				if (!content) throw new Error('XML has no <Content>');
+				text = content.textContent;
+			}
+			readyHtml = text;
+			blobBtn.disabled = writeBtn.disabled = false;
+			log('Ready: ' + text.length + ' chars');
+		} catch (err) {
+			log('Fetch failed: ' + err.message);
+		}
+	}
+
+	function openOrWarn (url) {
+		var w = window.open(url, '_blank');
+		if (!w) log('Popup blocked: allow popups for this page');
+		return w;
+	}
+
+	document.getElementById('origin').textContent = location.origin;
+
+	document.getElementById('btnIframe').addEventListener('click', function () {
+		var url = document.getElementById('iframeUrl').value.trim();
+		if (!isHttpUrl(url)) {
+			log('Iframe URL must be http(s)');
+			return;
+		}
+		var w = openOrWarn('');
+		if (!w) return;
+		var doc = w.document;
+		doc.open();
+		doc.write('<!DOCTYPE html><html><head><title>Mode 1</title><style>html,body{margin:0;height:100%;overflow:hidden}iframe{border:0;width:100%;height:100%}</style></head><body></body></html>');
+		doc.close();
+		// Built with DOM calls, not string-joined, so the URL can't break out of the markup
+		var frame = doc.createElement('iframe');
+		frame.src = url;
+		frame.allowFullscreen = true;
+		doc.body.appendChild(frame);
+		log('Mode 1 opened: game origin = ' + new URL(url).origin);
+	});
+
+	blobBtn.addEventListener('click', function () {
+		if (!readyHtml) return;
+		var blobUrl = URL.createObjectURL(new Blob([readyHtml], { type: 'text/html' }));
+		if (openOrWarn(blobUrl)) log('Mode 2 opened: game origin = ' + location.origin + ' (inherited)');
+		// The new tab has loaded the blob by then; free it after a grace period
+		setTimeout(function () { URL.revokeObjectURL(blobUrl); }, 60000);
+	});
+
+	writeBtn.addEventListener('click', function () {
+		if (!readyHtml) return;
+		var w = openOrWarn('');
+		if (!w) return;
+		w.document.open();
+		w.document.write(readyHtml);
+		w.document.close();
+		log('Mode 3 opened: game origin = ' + location.origin + ' (inherited)');
+	});
+
+	document.getElementById('btnReload').addEventListener('click', loadHtml);
+	loadHtml();
+})();
+</script>
+</body>
+</html>
