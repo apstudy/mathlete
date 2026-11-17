@@ -8,15 +8,16 @@ what is unfinished.
 
 | Repo | Branch | Unpushed | Live |
 |---|---|---|---|
-| `ShellShockers` | `portalLazySkinsTurnstile` | whole branch (local only) | — |
+| `ShellShockers` | `portalBranch` | 172 (local only) | — |
 | `shellbros.github.io` | `main` | 3 | build **43** (`499c752`) |
 | `mathlete` | `main` | 4 | build **53** (`cc01485`) |
 
-Each shell's unpushed commits are the branch-guard allowlist change plus the
-2026-11-17 build of `portalLazySkinsTurnstile` (shellbros build 44, mathlete build
-54); mathlete also has this file's update. Built and checked, **not live** — see 1.
+Each shell's unpushed commits are the 2026-11-17 build (shellbros build 44,
+mathlete build 54), a temporary branch-guard allowlist and its revert; mathlete
+also has this file's updates. Built and checked, **not live** — see 1.
 
-`portalLazySkinsTurnstile` and 46 `portalBranch` commits exist only on this Mac.
+Local `portalBranch` now carries all of `origin/develop` (lazy skins + Turnstile)
+and is **not pushed**: it exists only on this Mac.
 
 **Never push without asking.**
 
@@ -24,14 +25,15 @@ Each shell's unpushed commits are the branch-guard allowlist change plus the
 
 ## 1. READY, NOT LIVE — lazy skins + Turnstile build
 
-`portalLazySkinsTurnstile` = `portalBranch` + `origin/testLazySkinsTurnstile`,
-merged in `3628ab014`. Built 2026-11-17 and verified; held back from going live.
-Do **not** build the test branch directly: it comes from `develop` and has none
-of the portal code (`makeShellHome.sh`, `cdn.js`, `wssHost()`, `?build=1`).
+Built 2026-11-17 from `3628ab014` (`portalBranch` + `testLazySkinsTurnstile`,
+on a temporary branch). `origin/develop` was then merged into `portalBranch`
+(`eb133c99c`); it added only `game/tools/turnstileFloodDev.cjs`, so `game/src`
+and `game/home` are identical to what was built. Held back from going live.
 
-The branch guards in `build-all.sh` and both `build.sh` files accept it
-temporarily. Remove it from the allowlists once the work is merged into
-`portalBranch`.
+Never build `develop` or a feature branch directly: they have none of the
+portal code (`makeShellHome.sh`, `cdn.js`, `wssHost()`, `?build=1`). Merge them
+into `portalBranch` instead. The one conflict last time was the language fetch
+in `gameApp.js`: keep `window.JSCDN` and take `ClientVersion`.
 
 ### Checked and fine
 
